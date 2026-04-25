@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+
+# Downloaded embeddings and archives
+data/glove.6B.zip
+data/glove.6B.100d.txt
+data/glove.6B.100d_cache.npz
+
+# Generated experiment artifacts
+results/*.joblib
+results/*.pt
+results/*.csv
+results/plots/
+
+# Saved perturbation CSVs in results/perturbations/ stay trackable on purpose.

@@ -1,190 +1,234 @@
-"""
-perturbations.py
-Applies controlled grammatical perturbations to a list of sentences.
-
-Perturbation types
-------------------
-  punct_removal   : Remove all punctuation characters (severity ignored — always full removal).
-  spelling_errors : Randomly corrupt a fraction of tokens with character-level noise.
-  word_deletion   : Randomly drop a fraction of tokens.
-  word_order      : Randomly swap adjacent token pairs with a given probability.
-
-Severity
---------
-  For `punct_removal`, severity is ignored.
-  For all others, severity ∈ {0.1, 0.3, 0.5} controls the fraction of tokens affected.
-
-Usage
------
-  from data.perturbations import perturb
-  noisy = perturb(sentences, ptype="spelling_errors", severity=0.3)
-"""
-
+import csv
+import os
 import random
 import string
-from typing import List, Optional
+import sys
+import re
+
 
 SEED = 42
-
-PERTURBATION_TYPES = ["punct_removal", "spelling_errors", "word_deletion", "word_order"]
 SEVERITIES = [0.1, 0.3, 0.5]
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SAVE_DIR = os.path.join(PROJECT_ROOT, "results", "perturbations")
+OUTPUT_PATH = os.path.join(SAVE_DIR, "validation_perturbations.csv")
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
 
-def _remove_punct(sentence: str) -> str:
+
+FUNCTION_WORDS = set("""
+a an the and or but if while although though because so
+of in on at to for from with by as into onto about over under after before between through during
+is am are was were be been being do does did have has had
+will would can could should may might must
+""".split())
+
+NEGATION_WORDS = {"no", "nor", "not", "never"}
+
+
+def remove_punctuation(sentence):
     return sentence.translate(str.maketrans("", "", string.punctuation))
 
+def normalize_sentence(sentence):
+    sentence = sentence.strip()
 
-def _corrupt_word(word: str, rng: random.Random) -> str:
-    """Apply one random character-level operation to a word."""
-    if len(word) == 0:
+    sentence = sentence.replace("``", '"')
+    sentence = sentence.replace("''", '"')
+
+    sentence = re.sub(r"\s+('s|'re|'ve|'ll|'d|'m|n't|'em)\b", r"\1", sentence)
+    sentence = re.sub(r"\s+([,.;:!?%])", r"\1", sentence)
+
+    sentence = re.sub(r"\(\s+", "(", sentence)
+    sentence = re.sub(r"\s+\)", ")", sentence)
+
+    sentence = re.sub(r'"\s+', '"', sentence)
+    sentence = re.sub(r'\s+"', '"', sentence)
+
+    sentence = re.sub(r"\s+", " ", sentence)
+
+    return sentence.strip()
+
+def clean_token(token):
+    return token.strip(string.punctuation).lower()
+
+
+def corrupt_word(word):
+    if len(word) <= 1:
         return word
-    op = rng.choice(["swap", "delete", "insert", "transpose"])
 
-    if op == "swap" and len(word) >= 2:
-        # Replace a random char with a random lowercase letter
-        idx = rng.randrange(len(word))
-        replacement = rng.choice(string.ascii_lowercase)
-        return word[:idx] + replacement + word[idx + 1:]
+    op = random.choice(["swap", "delete", "insert", "transpose"])
 
-    elif op == "delete" and len(word) >= 2:
-        idx = rng.randrange(len(word))
-        return word[:idx] + word[idx + 1:]
+    if op == "swap":
+        chars = list(word)
+        i = random.randrange(len(chars))
+        j = random.randrange(len(chars))
+        chars[i], chars[j] = chars[j], chars[i]
+        return "".join(chars)
 
-    elif op == "insert":
-        idx = rng.randrange(len(word) + 1)
-        char = rng.choice(string.ascii_lowercase)
-        return word[:idx] + char + word[idx:]
+    if op == "delete":
+        i = random.randrange(len(word))
+        return word[:i] + word[i + 1:]
 
-    elif op == "transpose" and len(word) >= 2:
-        # Swap two adjacent characters
-        idx = rng.randrange(len(word) - 1)
-        lst = list(word)
-        lst[idx], lst[idx + 1] = lst[idx + 1], lst[idx]
-        return "".join(lst)
+    if op == "insert":
+        i = random.randrange(len(word) + 1)
+        c = random.choice(string.ascii_lowercase)
+        return word[:i] + c + word[i:]
 
-    # Fallback: replace a character
-    idx = rng.randrange(len(word))
-    return word[:idx] + rng.choice(string.ascii_lowercase) + word[idx + 1:]
+    i = random.randrange(len(word) - 1)
+    chars = list(word)
+    chars[i], chars[i + 1] = chars[i + 1], chars[i]
+    return "".join(chars)
 
 
-def _apply_spelling_errors(sentence: str, severity: float, rng: random.Random) -> str:
+def spelling_errors(sentence, severity):
     tokens = sentence.split()
-    if not tokens:
-        return sentence
-    result = []
-    for token in tokens:
-        if rng.random() < severity:
-            # Only corrupt alphanumeric content; preserve pure-punct tokens
-            has_alpha = any(c.isalpha() for c in token)
-            result.append(_corrupt_word(token, rng) if has_alpha else token)
-        else:
-            result.append(token)
-    return " ".join(result)
 
+    for i, token in enumerate(tokens):
+        if any(ch.isalpha() for ch in token) and random.random() < severity:
+            tokens[i] = corrupt_word(token)
 
-def _apply_word_deletion(sentence: str, severity: float, rng: random.Random) -> str:
-    tokens = sentence.split()
-    if len(tokens) <= 1:
-        return sentence  # never produce empty sentences
-    kept = [t for t in tokens if rng.random() > severity]
-    # Guarantee at least one token survives
-    if not kept:
-        kept = [rng.choice(tokens)]
-    return " ".join(kept)
-
-
-def _apply_word_order(sentence: str, severity: float, rng: random.Random) -> str:
-    tokens = sentence.split()
-    if len(tokens) <= 1:
-        return sentence
-    tokens = tokens[:]
-    i = 0
-    while i < len(tokens) - 1:
-        if rng.random() < severity:
-            tokens[i], tokens[i + 1] = tokens[i + 1], tokens[i]
-            i += 2  # skip the already-swapped pair to avoid cascading
-        else:
-            i += 1
     return " ".join(tokens)
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+def word_deletion(sentence, severity):
+    tokens = sentence.split()
 
-def perturb(
-    sentences: List[str],
-    ptype: str,
-    severity: Optional[float] = None,
-    seed: int = SEED,
-) -> List[str]:
-    """
-    Apply a perturbation to every sentence in the list.
+    if len(tokens) <= 1:
+        return sentence
 
-    Parameters
-    ----------
-    sentences : list of str
-    ptype     : one of PERTURBATION_TYPES
-    severity  : float in [0, 1]; ignored for 'punct_removal'
-    seed      : random seed for reproducibility
+    candidates = []
+    for i, token in enumerate(tokens):
+        base = clean_token(token)
+        if base in FUNCTION_WORDS and base not in NEGATION_WORDS:
+            candidates.append(i)
 
-    Returns
-    -------
-    list of str — perturbed sentences (same length as input)
-    """
-    if ptype not in PERTURBATION_TYPES:
-        raise ValueError(f"Unknown perturbation type {ptype!r}. Choose from {PERTURBATION_TYPES}.")
+    if not candidates:
+        return sentence
 
-    if ptype != "punct_removal" and severity is None:
-        raise ValueError(f"severity must be specified for ptype={ptype!r}.")
+    num_to_delete = round(len(tokens) * severity)
+    num_to_delete = min(num_to_delete, len(candidates), len(tokens) - 1)
 
-    rng = random.Random(seed)
+    if num_to_delete <= 0:
+        return sentence
 
-    if ptype == "punct_removal":
-        return [_remove_punct(s) for s in sentences]
+    delete_positions = set(random.sample(candidates, num_to_delete))
+    kept = []
 
-    elif ptype == "spelling_errors":
-        return [_apply_spelling_errors(s, severity, rng) for s in sentences]
+    for i, token in enumerate(tokens):
+        if i not in delete_positions:
+            kept.append(token)
 
-    elif ptype == "word_deletion":
-        return [_apply_word_deletion(s, severity, rng) for s in sentences]
-
-    elif ptype == "word_order":
-        return [_apply_word_order(s, severity, rng) for s in sentences]
+    return " ".join(kept)
 
 
-# ---------------------------------------------------------------------------
-# Verification / smoke test
-# ---------------------------------------------------------------------------
+def word_order(sentence, severity):
+    tokens = sentence.split()
+    i = 0
 
-if __name__ == "__main__":
-    samples = [
-        "The movie was surprisingly moving and well-acted.",
-        "A dull, predictable film with no redeeming qualities.",
-        "Absolutely fantastic performances all around!",
+    while i < len(tokens) - 1:
+        if random.random() < severity:
+            tokens[i], tokens[i + 1] = tokens[i + 1], tokens[i]
+            i += 2
+        else:
+            i += 1
+
+    return " ".join(tokens)
+
+
+def apply_steps(sentence, steps, severity):
+    for step in steps:
+        if step == "punct_removal":
+            sentence = remove_punctuation(sentence)
+        elif step == "spelling_errors":
+            sentence = spelling_errors(sentence, severity)
+        elif step == "word_deletion":
+            sentence = word_deletion(sentence, severity)
+        elif step == "word_order":
+            sentence = word_order(sentence, severity)
+        else:
+            raise ValueError(f"Unknown perturbation type: {step}")
+
+    return sentence
+
+
+def make_conditions():
+    conditions = [
+        ("clean", None, []),
+        ("punct_removal", None, ["punct_removal"]),
     ]
 
-    print("=" * 60)
-    print("PERTURBATION VERIFICATION")
-    print("=" * 60)
+    for name in ["spelling_errors", "word_deletion", "word_order"]:
+        for severity in SEVERITIES:
+            conditions.append((name, severity, [name]))
 
-    for ptype in PERTURBATION_TYPES:
-        print(f"\n--- {ptype} ---")
-        if ptype == "punct_removal":
-            result = perturb(samples, ptype)
-            for orig, pert in zip(samples, result):
-                print(f"  ORIG : {orig}")
-                print(f"  PERT : {pert}")
-                print()
-        else:
-            for severity in SEVERITIES:
-                result = perturb(samples, ptype, severity)
-                print(f"  severity={severity}")
-                for orig, pert in zip(samples, result):
-                    print(f"    ORIG : {orig}")
-                    print(f"    PERT : {pert}")
-                print()
+    combinations = [
+        ("punct_plus_spelling", ["punct_removal", "spelling_errors"]),
+        ("deletion_plus_order", ["word_deletion", "word_order"]),
+        ("spelling_plus_deletion", ["spelling_errors", "word_deletion"]),
+        ("all_combined", ["punct_removal", "spelling_errors", "word_deletion", "word_order"]),
+    ]
+
+    for name, steps in combinations:
+        for severity in SEVERITIES:
+            conditions.append((name, severity, steps))
+
+    return conditions
+
+
+def save_validation_perturbations():
+    from data.load_data import get_val_sentences
+
+    sentences, labels = get_val_sentences()
+    sentences = [normalize_sentence(sentence) for sentence in sentences]
+    labels = list(labels)
+
+    conditions = make_conditions()
+    condition_outputs = []
+
+    for perturbation_type, severity, steps in conditions:
+        random.seed(SEED)
+        severity_label = "N/A" if severity is None else f"{severity:.1f}"
+
+        perturbed_sentences = []
+        for sentence in sentences:
+            perturbed_sentences.append(apply_steps(sentence, steps, severity))
+
+        condition_outputs.append(
+            (perturbation_type, severity_label, perturbed_sentences)
+        )
+
+    rows = []
+
+    for i, sentence in enumerate(sentences):
+        for perturbation_type, severity_label, perturbed_sentences in condition_outputs:
+            rows.append({
+                "sentence_index": i,
+                "label": labels[i],
+                "perturbation_type": perturbation_type,
+                "severity": severity_label,
+                "original_sentence": sentence,
+                "perturbed_sentence": perturbed_sentences[i],
+            })
+
+    os.makedirs(SAVE_DIR, exist_ok=True)
+
+    fieldnames = [
+        "sentence_index",
+        "label",
+        "perturbation_type",
+        "severity",
+        "original_sentence",
+        "perturbed_sentence",
+    ]
+
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print(f"Saved {len(rows)} rows to {OUTPUT_PATH}")
+
+
+if __name__ == "__main__":
+    save_validation_perturbations()
