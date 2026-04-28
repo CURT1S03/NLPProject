@@ -2,6 +2,8 @@
 
 Evaluates how three NLP models (Logistic Regression, Neural Bag-of-Words, DistilBERT) handle synthetic text perturbations across three sentiment classification datasets: [SST-2](https://huggingface.co/datasets/stanfordnlp/sst2), [IMDB](https://huggingface.co/datasets/imdb), and [Yelp Polarity](https://huggingface.co/datasets/yelp_polarity).
 
+Models are trained once on SST-2 and evaluated on all three datasets (cross-dataset OOD study). Each model is tested across **23 conditions** per dataset: 1 clean baseline, 4 atomic perturbation types (3 severities each), and 4 combination perturbation types (3 severities each).
+
 ---
 
 ## Repo Structure
@@ -11,19 +13,19 @@ NLPProject/
 ├── data/
 │   ├── __init__.py
 │   ├── load_data.py          # HuggingFace loader for SST-2, IMDB, Yelp Polarity
-│   └── perturbations.py      # All perturbation types + perturb() public API
+│   └── perturbations.py      # 4 atomic + 4 combination perturbation types
 ├── models/
 │   ├── __init__.py
 │   ├── baseline_lr.py        # TF-IDF (1-2 ngrams, 50k feat) + Logistic Regression
 │   ├── baseline_nbow.py      # GloVe-100d averaged vectors + 2-layer MLP
-│   └── bert_eval.py          # distilbert-base-uncased-finetuned-sst-2-english (zero-shot)
+│   └── bert_eval.py          # distilbert-base-uncased-finetuned-sst-2-english
 ├── experiments/
 │   ├── __init__.py
-│   ├── run_experiments.py    # Sweeps all model × dataset × condition combinations → results.csv
-│   └── analyze_results.py    # Tables + plots for all datasets
+│   ├── run_experiments.py    # Sweeps all model × dataset × condition → results.csv + mcnemar_results.csv
+│   └── analyze_results.py    # Accuracy tables + 7 plot types per dataset
 ├── results/
 │   ├── perturbations/        # Pre-generated perturbed sentences
-│   ├── plots/                # Created on first analysis run (per-dataset plots)
+│   ├── plots/                # Per-dataset plots (created on first analysis run)
 │   │   ├── accuracy_curves_{dataset}.png
 │   │   ├── drop_heatmap_{dataset}.png
 │   │   ├── combination_heatmap_{dataset}.png
@@ -31,7 +33,8 @@ NLPProject/
 │   │   ├── flip_rate_{dataset}.png
 │   │   ├── bert_confidence.png
 │   │   └── dataset_comparison.png
-│   ├── results.csv           # Experiment output (model × dataset × condition metrics)
+│   ├── results.csv           # All metrics: model × dataset × condition
+│   ├── mcnemar_results.csv   # McNemar significance tests between model pairs (generated if statsmodels installed)
 │   ├── lr_model.joblib       # Cached LR pipeline (auto-generated, gitignored)
 │   └── nbow_model.pt         # Cached NBOW checkpoint (auto-generated, gitignored)
 ├── NLPProject.ipynb          # End-to-end notebook (Colab-compatible)
@@ -51,82 +54,89 @@ pip install -r requirements.txt
 ### 2. Download GloVe embeddings (required for NBOW only)
 
 ```bash
-# Download and extract into data/
-curl -O https://nlp.stanford.edu/data/glove.6B.zip
-unzip glove.6B.zip glove.6B.100d.txt -d data/
+curl -L https://nlp.stanford.edu/data/glove.6B.zip -o data/glove.6B.zip
+unzip data/glove.6B.zip glove.6B.100d.txt -d data/
+rm data/glove.6B.zip
 ```
-
-Or set the `GLOVE_PATH` environment variable to an existing `glove.6B.100d.txt` path.
 
 ---
 
 ## Running the Pipeline
 
-Run each step from the **project root** in order:
+Run from the **project root**:
 
 ```bash
-# Step 1 — Generate all perturbed validation sentences (saves to results/perturbations/)
-python -m data.perturbations
-
-# Step 2 — Train LR + NBOW baselines (DistilBERT needs no training)
-python -m models.baseline_lr
-python -m models.baseline_nbow
-
-# Step 3 — Sweep all 23 conditions across all 3 models
+# Run full experiment across all 3 models × 3 datasets × 23 conditions
 python -m experiments.run_experiments
 
-# Step 4 — Produce accuracy table + 3 plots
+# Generate all tables and plots
 python -m experiments.analyze_results
 ```
 
-Skip slow models during development:
+**Flags:**
 ```bash
-python -m experiments.run_experiments --skip-nbow --skip-bert
+python -m experiments.run_experiments --skip-nbow          # skip NBOW (no GloVe needed)
+python -m experiments.run_experiments --skip-bert          # skip DistilBERT (faster)
+python -m experiments.run_experiments --datasets sst2      # run on one dataset only
 ```
 
 ---
 
 ## Perturbation Types
 
-| `ptype` | Severity axis | Description |
+### Atomic (4 types)
+
+| `ptype` | Severity | Description |
 |---|---|---|
-| `punct_removal` | Binary (always full) | Strips all `string.punctuation` characters |
-| `spelling_errors` | Fraction of words corrupted | Per-word: random character swap / deletion / insertion / adjacent-transposition |
-| `word_deletion` | Fraction of tokens dropped | Removes grammatical function words only (articles, prepositions, auxiliaries); negation words protected |
-| `word_order` | Fraction of adjacent pairs swapped | Iterates tokens, swaps adjacent pair with probability = severity |
-| `punct_plus_spelling` | Combined | Punctuation removal → spelling errors |
-| `deletion_plus_order` | Combined | Word deletion → word-order disruption |
-| `spelling_plus_deletion` | Combined | Spelling errors → word deletion |
-| `all_combined` | Combined | All four steps applied in sequence |
+| `punct_removal` | N/A (always full) | Strips all punctuation |
+| `spelling_errors` | 0.1 / 0.3 / 0.5 | Random character-level noise per word (swap, delete, insert, transpose) |
+| `word_deletion` | 0.1 / 0.3 / 0.5 | Drops function words (articles, prepositions, auxiliaries); negation protected |
+| `word_order` | 0.1 / 0.3 / 0.5 | Swaps adjacent token pairs with given probability |
 
-Severities used for types 2–4 and all combinations: **0.1, 0.3, 0.5**.  
-`punct_removal` is always full (severity = N/A).
+### Combination (4 types, severity 0.1 / 0.3 / 0.5)
 
-Total conditions per model: **23** (1 clean + 1 punct_removal + 9 single-severity + 12 combination-severity).
+| `ptype` | Steps |
+|---|---|
+| `punct_plus_spelling` | punct_removal → spelling_errors |
+| `deletion_plus_order` | word_deletion → word_order |
+| `spelling_plus_deletion` | spelling_errors → word_deletion |
+| `all_combined` | All four atomic steps in sequence |
+
+**Total conditions per model per dataset: 23**
 
 ---
 
-## Results
+## Metrics
 
 `results/results.csv` columns:
 
 | Column | Description |
 |---|---|
+| `dataset` | `sst2`, `imdb`, or `yelp_polarity` |
 | `model` | `LR`, `NBOW`, or `DistilBERT` |
-| `perturbation_type` | One of the 8 ptype names above, or `clean` |
+| `perturbation_type` | Perturbation name or `clean` |
 | `severity` | `0.1`, `0.3`, `0.5`, or `N/A` |
-| `accuracy` | Fraction of 872 val examples correctly labelled |
-| `accuracy_drop` | `clean_accuracy − perturbed_accuracy` (negative = perturbation helped) |
+| `accuracy` | Fraction correctly labelled |
+| `accuracy_drop` | `clean_accuracy − perturbed_accuracy` |
 | `f1` | Binary F1 score |
 | `f1_drop` | `clean_f1 − perturbed_f1` |
+| `acc_neg` | Accuracy on negative class only |
+| `acc_pos` | Accuracy on positive class only |
+| `flip_rate` | Fraction of predictions that changed vs. clean |
+| `mean_confidence` | Mean softmax confidence (DistilBERT only) |
+| `std_confidence` | Std of softmax confidence (DistilBERT only) |
 
 ### Plots
 
 | File | Contents |
 |---|---|
-| `accuracy_curves.png` | 2×2 grid — accuracy vs. severity for the 4 atomic perturbation types, one line per model |
-| `drop_heatmap.png` | Heatmap — accuracy drop for atomic conditions; diverging colormap (green = improvement, red = degradation) |
-| `combination_heatmap.png` | Same diverging heatmap for the 4 combination conditions |
+| `accuracy_curves_{dataset}.png` | Accuracy vs. severity per perturbation type, one line per model |
+| `drop_heatmap_{dataset}.png` | Accuracy drop heatmap for atomic conditions |
+| `combination_heatmap_{dataset}.png` | Accuracy drop heatmap for combination conditions |
+| `per_class_accuracy_{dataset}.png` | Positive vs. negative class accuracy per condition |
+| `flip_rate_{dataset}.png` | Prediction flip rate per condition |
+| `bert_confidence.png` | DistilBERT confidence distribution across conditions |
+| `dataset_comparison.png` | Cross-dataset accuracy comparison |
 
 ---
 
