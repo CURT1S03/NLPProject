@@ -1,6 +1,6 @@
 # NLPProject — Sentiment Robustness Study
 
-Evaluates how three NLP models (Logistic Regression, Neural Bag-of-Words, DistilBERT) handle synthetic text perturbations across three sentiment classification datasets: [SST-2](https://huggingface.co/datasets/stanfordnlp/sst2), [IMDB](https://huggingface.co/datasets/imdb), and [Yelp Polarity](https://huggingface.co/datasets/yelp_polarity).
+Evaluates how three NLP models (Logistic Regression, Neural Bag-of-Words, DistilBERT) handle synthetic text perturbations across three sentiment classification datasets: [SST-2](https://huggingface.co/datasets/stanfordnlp/sst2), IMDB, and Yelp Polarity.
 
 Models are trained once on SST-2 and evaluated on all three datasets (cross-dataset OOD study). Each model is tested across **23 conditions** per dataset: 1 clean baseline, 4 atomic perturbation types (3 severities each), and 4 combination perturbation types (3 severities each).
 
@@ -12,7 +12,7 @@ Models are trained once on SST-2 and evaluated on all three datasets (cross-data
 NLPProject/
 ├── data/
 │   ├── __init__.py
-│   ├── load_data.py          # HuggingFace loader for SST-2, IMDB, Yelp Polarity
+│   ├── load_data.py          # Loads SST-2, IMDB, and Yelp Polarity via HuggingFace datasets library
 │   └── perturbations.py      # 4 atomic + 4 combination perturbation types
 ├── models/
 │   ├── __init__.py
@@ -137,6 +137,24 @@ python -m experiments.run_experiments --datasets sst2      # run on one dataset 
 | `flip_rate_{dataset}.png` | Prediction flip rate per condition |
 | `bert_confidence.png` | DistilBERT confidence distribution across conditions |
 | `dataset_comparison.png` | Cross-dataset accuracy comparison |
+
+---
+
+## Datasets
+
+| Dataset | Examples | Avg. Length | Labels | Source |
+|---|---|---|---|---|
+| SST-2 | 872 (val) | 19.5 tokens | Movie reviews (phrases) | Socher et al., EMNLP 2013 |
+| IMDB | 25,000 (test) | ~230 tokens | Movie reviews (full) | Maas et al., ACL 2011 |
+| Yelp Polarity | 38,000 (test) | ~155 tokens | Yelp business reviews | Zhang et al., NeurIPS 2015 |
+
+All datasets use binary labels (0 = negative, 1 = positive). IMDB and Yelp are subsampled to 872 examples using a fixed random seed for comparability with SST-2.
+
+### References
+
+- Socher, R., et al. (2013). *Recursive Deep Models for Semantic Compositionality Over a Sentiment Treebank.* EMNLP 2013.
+- Maas, A., et al. (2011). *Learning Word Vectors for Sentiment Analysis.* ACL 2011.
+- Zhang, X., Zhao, J., & LeCun, Y. (2015). *Character-level Convolutional Networks for Text Classification.* NeurIPS 2015.
 
 ---
 
