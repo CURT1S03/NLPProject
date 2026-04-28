@@ -150,6 +150,30 @@ python -m experiments.run_experiments --datasets sst2      # run on one dataset 
 
 All datasets use binary labels (0 = negative, 1 = positive). IMDB and Yelp are subsampled to 872 examples using a fixed random seed for comparability with SST-2.
 
+### Sample Examples
+
+**SST-2** — Short movie review phrases (~19 tokens avg):
+```
+[pos] "it 's a charming and often affecting journey ."
+[neg] "unflinchingly bleak and desperate"
+```
+
+**IMDB** — Full movie reviews (~230 tokens avg):
+```
+[neg] "I love sci-fi and am willing to put up with a lot. Sci-fi movies/TV are usually
+      underfunded, under-appreciated and misunderstood..."
+[pos] "Previous reviewer Claudio Carvalho gave a much better recap of the film's plot
+      details than I could. What I recall mostly is that it was lyrical..."
+```
+
+**Yelp Polarity** — Business reviews (~155 tokens avg):
+```
+[pos] "Contrary to other reviews, I have zero complaints about the service or the prices.
+      I have been getting tire service here for over 2 years..."
+[neg] "Last summer I had an appointment to get new tires and had to wait a super long
+      time. I also went in this week for them to fix a flat..."
+```
+
 ### References
 
 - Socher, R., et al. (2013). *Recursive Deep Models for Semantic Compositionality Over a Sentiment Treebank.* EMNLP 2013.
