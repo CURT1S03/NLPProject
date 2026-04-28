@@ -83,7 +83,7 @@ def _load_results() -> pd.DataFrame:
     return df
 
 
-def _save(fig: plt.Figure, name: str, dataset_id: str | None = None) -> None:
+def _save(fig: plt.Figure, name: str, dataset_id=None) -> None:
     os.makedirs(_PLOTS_DIR, exist_ok=True)
     suffix = f"_{dataset_id}" if dataset_id else ""
     path = os.path.join(_PLOTS_DIR, f"{name}{suffix}.png")

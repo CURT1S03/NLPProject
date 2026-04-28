@@ -12,7 +12,6 @@ data/glove.6B.100d_cache.npz
 # Generated experiment artifacts
 results/*.joblib
 results/*.pt
-results/*.csv
-results/plots/
+# results/plots/ and results/results.csv are tracked intentionally
 
 # Saved perturbation CSVs in results/perturbations/ stay trackable on purpose.

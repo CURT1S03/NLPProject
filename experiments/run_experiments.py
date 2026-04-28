@@ -192,7 +192,7 @@ def _compute_mcnemar(
 def run(
     skip_nbow: bool = False,
     skip_bert: bool = False,
-    datasets: list[str] | None = None,
+    datasets=None,  # type: Optional[list]
 ) -> None:
     os.makedirs(_RESULTS_DIR, exist_ok=True)
     conditions = _build_conditions()

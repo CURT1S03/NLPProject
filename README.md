@@ -1,6 +1,6 @@
-# NLPProject — SST-2 Robustness Study
+# NLPProject — Sentiment Robustness Study
 
-Evaluates how three NLP models (Logistic Regression, Neural Bag-of-Words, DistilBERT) handle synthetic text perturbations on the [SST-2](https://huggingface.co/datasets/stanfordnlp/sst2) sentiment classification dataset.
+Evaluates how three NLP models (Logistic Regression, Neural Bag-of-Words, DistilBERT) handle synthetic text perturbations across three sentiment classification datasets: [SST-2](https://huggingface.co/datasets/stanfordnlp/sst2), [IMDB](https://huggingface.co/datasets/imdb), and [Yelp Polarity](https://huggingface.co/datasets/yelp_polarity).
 
 ---
 
@@ -9,26 +9,32 @@ Evaluates how three NLP models (Logistic Regression, Neural Bag-of-Words, Distil
 ```
 NLPProject/
 ├── data/
-│   ├── load_data.py          # HuggingFace SST-2 loader with module-level cache
+│   ├── __init__.py
+│   ├── load_data.py          # HuggingFace loader for SST-2, IMDB, Yelp Polarity
 │   └── perturbations.py      # All perturbation types + perturb() public API
 ├── models/
+│   ├── __init__.py
 │   ├── baseline_lr.py        # TF-IDF (1-2 ngrams, 50k feat) + Logistic Regression
 │   ├── baseline_nbow.py      # GloVe-100d averaged vectors + 2-layer MLP
 │   └── bert_eval.py          # distilbert-base-uncased-finetuned-sst-2-english (zero-shot)
 ├── experiments/
-│   ├── run_experiments.py    # Sweeps all 23 model × condition combinations → results.csv
-│   └── analyze_results.py    # Accuracy table + 3 plots
+│   ├── __init__.py
+│   ├── run_experiments.py    # Sweeps all model × dataset × condition combinations → results.csv
+│   └── analyze_results.py    # Tables + plots for all datasets
 ├── results/
-│   ├── perturbations/
-│   │   └── validation_perturbations.csv   # Pre-generated perturbed sentences (872 × 26 conditions)
-│   ├── plots/                             # Created on first analysis run
-│   │   ├── accuracy_curves.png
-│   │   ├── drop_heatmap.png
-│   │   └── combination_heatmap.png
-│   ├── results.csv                        # Experiment output (model × condition accuracies)
-│   ├── lr_model.joblib                    # Cached LR pipeline (auto-generated)
-│   └── nbow_model.pt                      # Cached NBOW checkpoint (auto-generated)
-├── NLPProject.ipynb           # End-to-end notebook (Colab-compatible)
+│   ├── perturbations/        # Pre-generated perturbed sentences
+│   ├── plots/                # Created on first analysis run (per-dataset plots)
+│   │   ├── accuracy_curves_{dataset}.png
+│   │   ├── drop_heatmap_{dataset}.png
+│   │   ├── combination_heatmap_{dataset}.png
+│   │   ├── per_class_accuracy_{dataset}.png
+│   │   ├── flip_rate_{dataset}.png
+│   │   ├── bert_confidence.png
+│   │   └── dataset_comparison.png
+│   ├── results.csv           # Experiment output (model × dataset × condition metrics)
+│   ├── lr_model.joblib       # Cached LR pipeline (auto-generated, gitignored)
+│   └── nbow_model.pt         # Cached NBOW checkpoint (auto-generated, gitignored)
+├── NLPProject.ipynb          # End-to-end notebook (Colab-compatible)
 └── requirements.txt
 ```
 
