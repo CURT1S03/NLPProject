@@ -75,6 +75,29 @@ class DistilBERTModel:
                 all_preds.append(_LABEL_MAP[out["label"]])
         return np.array(all_preds, dtype=np.int64)
 
+    def predict_with_scores(
+        self, sentences: list[str]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Run inference and return (preds, confidence_scores).
+        confidence_scores[i] is the model's probability for the predicted label.
+        """
+        if self._pipe is None:
+            raise RuntimeError("Pipeline not loaded. Call .load() first.")
+
+        all_preds, all_scores = [], []
+        for start in tqdm(
+            range(0, len(sentences), self.batch_size),
+            desc="[BERT] Inference+scores",
+            unit="batch",
+        ):
+            batch = sentences[start : start + self.batch_size]
+            outputs = self._pipe(batch, truncation=True, max_length=128)
+            for out in outputs:
+                all_preds.append(_LABEL_MAP[out["label"]])
+                all_scores.append(out["score"])
+        return np.array(all_preds, dtype=np.int64), np.array(all_scores, dtype=np.float32)
+
 
 # ---------------------------------------------------------------------------
 # Smoke test
