@@ -25,6 +25,7 @@ Usage
 """
 
 import os
+import string
 import numpy as np
 import torch
 import torch.nn as nn
@@ -111,7 +112,9 @@ def sentences_to_embeddings(
     """Average GloVe vectors for each sentence. OOV tokens → zero vector."""
     result = np.zeros((len(sentences), EMBED_DIM), dtype=np.float32)
     for i, sent in enumerate(sentences):
-        tokens = sent.lower().split()
+        raw = sent.lower().split()
+        tokens = [t.strip(string.punctuation) for t in raw]
+        tokens = [t for t in tokens if t]
         indices = [word2idx[t] for t in tokens if t in word2idx]
         if indices:
             result[i] = embedding_matrix[indices].mean(axis=0)
@@ -168,7 +171,7 @@ class NBOWModel:
         if not force_retrain and os.path.exists(self.model_cache):
             print(f"[NBOW] Loading cached model from {self.model_cache}")
             self.mlp = _MLP().to(self.device)
-            self.mlp.load_state_dict(torch.load(self.model_cache, map_location=self.device))
+            self.mlp.load_state_dict(torch.load(self.model_cache, map_location=self.device, weights_only=True))
             self.mlp.eval()
             return
 

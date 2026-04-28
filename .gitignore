@@ -1,10 +1,13 @@
 .venv/
 __pycache__/
 
-# Downloaded embeddings and archives
+# Downloaded embeddings and archives (ignored wherever they live)
+glove.6B.zip
 data/glove.6B.zip
+*.zip
 data/glove.6B.100d.txt
 data/glove.6B.100d_cache.npz
+*.npz
 
 # Generated experiment artifacts
 results/*.joblib

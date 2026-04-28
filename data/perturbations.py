@@ -8,6 +8,7 @@ import re
 
 SEED = 42
 SEVERITIES = [0.1, 0.3, 0.5]
+PERTURBATION_TYPES = ["punct_removal", "spelling_errors", "word_deletion", "word_order"]
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAVE_DIR = os.path.join(PROJECT_ROOT, "results", "perturbations")
@@ -176,6 +177,61 @@ def make_conditions():
     return conditions
 
 
+PTYPE_STEPS = {
+    "punct_removal":         ["punct_removal"],
+    "spelling_errors":        ["spelling_errors"],
+    "word_deletion":          ["word_deletion"],
+    "word_order":             ["word_order"],
+    "punct_plus_spelling":    ["punct_removal", "spelling_errors"],
+    "deletion_plus_order":    ["word_deletion", "word_order"],
+    "spelling_plus_deletion": ["spelling_errors", "word_deletion"],
+    "all_combined":           ["punct_removal", "spelling_errors", "word_deletion", "word_order"],
+}
+
+
+def perturb(sentences, ptype, severity):
+    if ptype not in PTYPE_STEPS:
+        raise ValueError(f"Unknown ptype '{ptype}'. Valid types: {list(PTYPE_STEPS)}")
+    steps = PTYPE_STEPS[ptype]
+    return [apply_steps(sentence, steps, severity) for sentence in sentences]
+
+
+def print_examples(sentences, n=3):
+    sample = sentences[:n]
+
+    print("=" * 60)
+    print("PERTURBATION EXAMPLES")
+    print("=" * 60)
+
+    # Type 1: punctuation removal (binary, no severity)
+    print("\n--- punct_removal (full removal) ---")
+    random.seed(SEED)
+    for s in sample:
+        print(f"  ORIG : {s}")
+        print(f"  PERT : {apply_steps(s, ['punct_removal'], None)}")
+
+    # Types 2-4 with each severity
+    for ptype in ("spelling_errors", "word_deletion", "word_order"):
+        for severity in SEVERITIES:
+            print(f"\n--- {ptype}  severity={severity} ---")
+            random.seed(SEED)
+            for s in sample:
+                print(f"  ORIG : {s}")
+                print(f"  PERT : {apply_steps(s, [ptype], severity)}")
+
+    # Combinations
+    for ptype in ("punct_plus_spelling", "deletion_plus_order",
+                  "spelling_plus_deletion", "all_combined"):
+        for severity in SEVERITIES:
+            print(f"\n--- {ptype}  severity={severity} ---")
+            random.seed(SEED)
+            for s in sample:
+                print(f"  ORIG : {s}")
+                print(f"  PERT : {apply_steps(s, PTYPE_STEPS[ptype], severity)}")
+
+    print("\n" + "=" * 60)
+
+
 def save_validation_perturbations():
     from data.load_data import get_val_sentences
 
@@ -231,4 +287,8 @@ def save_validation_perturbations():
 
 
 if __name__ == "__main__":
+    from data.load_data import get_val_sentences as _get_val
+    _sentences, _ = _get_val()
+    _sentences = [normalize_sentence(s) for s in _sentences]
+    print_examples(_sentences)
     save_validation_perturbations()
