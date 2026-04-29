@@ -235,12 +235,20 @@ def plot_drop_heatmap(df: pd.DataFrame, dataset_id: str = "") -> None:
         + [f"{p.replace('_', ' ').title()}\n@{s}" for p, s in conditions[1:]]
 
     matrix = np.full((len(MODEL_ORDER), len(conditions)), np.nan)
+
     for r_idx, model in enumerate(MODEL_ORDER):
         mdf = df[df["model"] == model]
+
         for c_idx, (ptype, sev) in enumerate(conditions):
-            row = mdf[
-                (mdf["perturbation_type"] == ptype) & (mdf["severity"] == sev)
-            ]
+
+            if ptype == "punct_removal":
+                row = mdf[mdf["perturbation_type"] == "punct_removal"]
+            else:
+                row = mdf[
+                    (mdf["perturbation_type"] == ptype) &
+                    (mdf["severity"] == sev)
+                ]
+
             if not row.empty:
                 matrix[r_idx, c_idx] = row["accuracy_drop"].values[0]
 
@@ -263,15 +271,16 @@ def plot_drop_heatmap(df: pd.DataFrame, dataset_id: str = "") -> None:
         linewidths=0.5,
         linecolor="white",
     )
+
     ax.set_title(
         "Accuracy Drop from Clean Baseline (higher = more degraded)",
         fontsize=13, fontweight="bold", pad=12,
     )
     ax.set_xlabel("Perturbation Condition", fontsize=11)
     ax.set_ylabel("Model", fontsize=11)
+
     plt.tight_layout()
     _save(fig, "drop_heatmap", dataset_id)
-
 
 # ---------------------------------------------------------------------------
 # Plot 3 — Combination perturbations heatmap
@@ -559,7 +568,7 @@ def plot_significance_matrix(dataset_id: str = "") -> None:
     )
     mc["cond"] = mc["perturbation_type"] + "@" + mc["severity"]
 
-    conditions_ordered = sorted(mc["cond"].unique())
+    conditions_ordered = sorted(mc["cond"].dropna().astype(str).unique())
     matrix = np.full((len(model_pairs), len(conditions_ordered)), np.nan)
     sig_mask = np.zeros_like(matrix, dtype=bool)
 
